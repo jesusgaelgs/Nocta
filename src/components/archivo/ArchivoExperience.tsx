@@ -217,13 +217,26 @@ export function ArchivoExperience() {
       root.style.height = `${vh + maxScroll + vh * 2}px`;
     };
 
-    /* ---------- Opacidad del canvas: 0 → 1 cuando cargan los videos ---------- */
+    /* ---------- Opacidad del canvas ---------- */
     const revealCanvas = () => {
       if (revealed) return;
-      if (loadedCount >= 2 || videoLeft.readyState >= 2 || videoRight.readyState >= 2) {
+      if (
+        loadedCount >= 2 ||
+        videoLeft.readyState >= 1 ||
+        videoRight.readyState >= 1
+      ) {
         revealed = true;
         canvas.style.opacity = "1";
       }
+    };
+
+    /* Revelado forzoso: el canvas SIEMPRE se muestra (video o backdrop).
+       Clave en móvil: si el video tarda o no carga (Low Power Mode, red lenta),
+       el hero nunca queda vacío. */
+    const forceReveal = () => {
+      if (revealed) return;
+      revealed = true;
+      canvas.style.opacity = "1";
     };
 
     const onVideoData = () => {
@@ -242,7 +255,7 @@ export function ArchivoExperience() {
     };
     const onVideoError = (video: HTMLVideoElement, chain: string[]) => () => {
       swapVideoSource(video, chain);
-      revealCanvas();
+      forceReveal();
     };
     const onLeftError = onVideoError(videoLeft, [
       VIDEO_LEFT_PEXELS,
@@ -255,11 +268,13 @@ export function ArchivoExperience() {
 
     /* ---------- 4.9 Móvil/táctil: autoplay alternado ---------- */
     let touchEnded: (() => void) | null = null;
+    let touchRetry: (() => void) | null = null;
+    let touchSide: "left" | "right" = "left";
     if (touch && !reduced) {
-      let side: "left" | "right" = "left";
       const other = (s: "left" | "right"): "left" | "right" =>
         s === "left" ? "right" : "left";
       const playSide = (s: "left" | "right") => {
+        touchSide = s;
         videoLeft.style.display = s === "left" ? "block" : "none";
         videoRight.style.display = s === "right" ? "block" : "none";
         const v = s === "left" ? videoLeft : videoRight;
@@ -267,11 +282,18 @@ export function ArchivoExperience() {
         v.play().catch(() => {});
       };
       touchEnded = () => {
-        side = other(side);
-        playSide(side);
+        playSide(other(touchSide));
+      };
+      /* Reintento con la primera interacción del usuario (Low Power Mode,
+         políticas de autoplay): al tocar la página, si el video está pausado,
+         se reanuda. */
+      touchRetry = () => {
+        const v = touchSide === "left" ? videoLeft : videoRight;
+        if (v.paused) v.play().catch(() => {});
       };
       videoLeft.addEventListener("ended", touchEnded);
       videoRight.addEventListener("ended", touchEnded);
+      window.addEventListener("pointerdown", touchRetry, { passive: true });
       playSide("left");
     }
 
@@ -403,18 +425,23 @@ export function ArchivoExperience() {
 
     videoLeft.addEventListener("loadeddata", onVideoData);
     videoRight.addEventListener("loadeddata", onVideoData);
+    videoLeft.addEventListener("loadedmetadata", revealCanvas);
+    videoRight.addEventListener("loadedmetadata", revealCanvas);
     videoLeft.addEventListener("error", onLeftError);
     videoRight.addEventListener("error", onRightError);
 
-    /* Estado inicial */
-    videoLeft.style.display = "none";
-    videoRight.style.display = "block";
+    /* Estado inicial. OJO: en táctil NO pisamos aquí los displays —
+       playSide("left") del autoplay ya eligió cuál se ve. */
+    if (!touch) {
+      videoLeft.style.display = "none";
+      videoRight.style.display = "block";
+    }
     if (videoLeft.readyState >= 2) loadedCount += 1;
     if (videoRight.readyState >= 2) loadedCount += 1;
     revealCanvas();
     measure();
     applyCursorMode();
-    fallbackTimer = window.setTimeout(revealCanvas, 3000);
+    fallbackTimer = window.setTimeout(forceReveal, 2000);
     raf = requestAnimationFrame(tick);
 
     return () => {
@@ -428,11 +455,16 @@ export function ArchivoExperience() {
       resizeObserver.disconnect();
       videoLeft.removeEventListener("loadeddata", onVideoData);
       videoRight.removeEventListener("loadeddata", onVideoData);
+      videoLeft.removeEventListener("loadedmetadata", revealCanvas);
+      videoRight.removeEventListener("loadedmetadata", revealCanvas);
       videoLeft.removeEventListener("error", onLeftError);
       videoRight.removeEventListener("error", onRightError);
       if (touchEnded) {
         videoLeft.removeEventListener("ended", touchEnded);
         videoRight.removeEventListener("ended", touchEnded);
+      }
+      if (touchRetry) {
+        window.removeEventListener("pointerdown", touchRetry);
       }
       if (lenis && typeof lenis.start === "function") lenis.start();
       videoLeft.pause();
@@ -461,6 +493,7 @@ export function ArchivoExperience() {
         <video
           ref={videoLeftRef}
           src={VIDEO_LEFT}
+          poster="/images/archivo-backdrop.jpg"
           muted
           playsInline
           preload="auto"
@@ -470,6 +503,7 @@ export function ArchivoExperience() {
         <video
           ref={videoRightRef}
           src={VIDEO_RIGHT}
+          poster="/images/archivo-backdrop.jpg"
           muted
           playsInline
           preload="auto"
