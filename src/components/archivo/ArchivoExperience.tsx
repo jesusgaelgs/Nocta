@@ -347,7 +347,10 @@ export function ArchivoExperience() {
         if (symbolEl) symbolEl.textContent = SYMBOLS[next];
       }
 
-      /* Scrub por cursor X (desktop no táctil) con dead zone */
+      /* Scrub por cursor X (desktop no táctil) con dead zone.
+         Híbrido: dentro del dead zone el video se REPRODUCE (se ve en
+         movimiento aunque no toques el mouse); al mover el cursor fuera,
+         el scrub toma el control del tiempo. */
       if (!touch && !reduced) {
         const width = window.innerWidth;
         const dead = Math.max(30, width * 0.05);
@@ -364,23 +367,35 @@ export function ArchivoExperience() {
         }
 
         const active = activeSide === "left" ? videoLeft : videoRight;
-        const d = active.duration;
-        let target = 0;
-        if (dist > dead && Number.isFinite(d) && d > 0) {
-          const range = center - dead;
-          const t =
-            activeSide === "right"
-              ? (center - dead - mouseX) / range
-              : (mouseX - center - dead) / range;
-          target = Math.min(Math.max(t, 0), 1) * d;
-        }
-        if (
-          !active.seeking &&
-          Number.isFinite(d) &&
-          d > 0 &&
-          Math.abs(active.currentTime - target) > 0.03
-        ) {
-          active.currentTime = target;
+
+        if (dist <= dead) {
+          /* Dead zone: reproducción continua (sin loop attribute para no
+             romper la alternancia de móvil; reiniciamos al terminar). */
+          if (active.ended) active.currentTime = 0;
+          if (active.paused && active.readyState >= 2) {
+            active.play().catch(() => {});
+          }
+        } else {
+          /* Scrub: pausar para que el seek mande sin pelear con el play */
+          if (!active.paused) active.pause();
+          const d = active.duration;
+          let target = 0;
+          if (Number.isFinite(d) && d > 0) {
+            const range = center - dead;
+            const t =
+              activeSide === "right"
+                ? (center - dead - mouseX) / range
+                : (mouseX - center - dead) / range;
+            target = Math.min(Math.max(t, 0), 1) * d;
+          }
+          if (
+            !active.seeking &&
+            Number.isFinite(d) &&
+            d > 0 &&
+            Math.abs(active.currentTime - target) > 0.03
+          ) {
+            active.currentTime = target;
+          }
         }
       }
 
@@ -592,7 +607,9 @@ export function ArchivoExperience() {
 
       {/* 4.5 Nav */}
       <nav id="nav" aria-label="Archivo">
-        <span className="nav-about">ESTUDIO</span>
+        <a className="nav-about" href="/panel">
+          ESTUDIO
+        </a>
         <svg
           className="nav-burger"
           viewBox="0 0 40 40"
@@ -648,6 +665,9 @@ export function ArchivoExperience() {
       {/* 4.10 Footer */}
       <footer id="outro-footer" ref={footerRef}>
         <span>NOCTA ® 2026</span>
+        <a href="/panel" className="panel-link">
+          PANEL DEL ESTUDIO
+        </a>
         <span>AVISO DE PRIVACIDAD</span>
       </footer>
     </div>

@@ -14,10 +14,11 @@ scroll-driven **ARCHIVO** (motor de animación portado de *prmpt*), el
 
 | Ruta | Qué se ve |
 |---|---|
-| `/` | Redirige a `/archivo` (la experiencia es la portada) |
+| `/` | La experiencia directamente (URL limpia). `/archivo` es la misma ruta alternativa |
 | `/archivo` | Hero con video scrubbeado por cursor + galería scroll-driven + outro con CTA "simular" |
 | `/simulador` | Sube foto, describe tu idea, proyéctala sobre la piel, descarga PNG |
 | `/agenda` | Formulario de solicitud de cita (guarda en PostgreSQL) |
+| `/panel` | **Panel del estudio** (con clave `PANEL_KEY`): solicitudes por aceptar, agenda de citas con calendario (las aceptadas se cargan solas) e ideas/pendientes. Ligero, sin videos |
 | `/api/simulador/generate` | Genera el diseño (IA con clave, colección sin clave) |
 | `/api/agenda` | Guarda las solicitudes de cita |
 
@@ -146,15 +147,23 @@ Pega este prompt junto con el zip:
 ## ✔️ Verificación (checklist)
 
 1. `npm run dev` compila sin errores.
-2. `/` redirige a `/archivo`.
-3. `/archivo`: video del hero cargado, mover el cursor a los lados **scrubbea**
-   el video (dead zone al centro), el panel negro sube al hacer scroll, la
-   galería escala al entrar/salir y al final aparece el outro blanco con el
-   botón pulsante **"PRUEBA EL SIMULADOR → simular"**.
+2. `/` muestra la experiencia directamente (URL limpia, sin redirect).
+3. `/archivo`: video del hero cargado y **reproduciéndose al centro** (dead
+   zone); al mover el cursor a los lados, el scrub toma el control del tiempo
+   fotograma a fotograma. El panel negro sube al hacer scroll, la galería
+   escala al entrar/salir y al final aparece el outro blanco con el botón
+   pulsante **"PRUEBA EL SIMULADOR → simular"**.
 4. `/simulador`: subir foto → escribir prompt → "Generar diseño" → el diseño se
    proyecta y se puede mover/escalar/rotar → descargar PNG.
 5. `/agenda`: enviar el formulario → respuesta "Solicitud recibida" y la fila
    aparece en `cita_solicitudes`.
+
+## 🎨 Personalizar videos, fotos y textos
+
+Todo el material visual se reemplaza **sin tocar código** (mismo nombre de
+archivo en `public/`). Especificaciones exactas (formato, tamaño, duración),
+cómo cambiar el nombre de la marca/artista y el flujo de actualización:
+**ver [MEDIA_GUIDE.md](./MEDIA_GUIDE.md)**.
 
 ## 🧩 Notas
 

@@ -107,6 +107,12 @@ igual; la agenda solo avisará que no hay BD.)
 
 ### Notas Vercel
 
+- **Panel del estudio:** en Vercel agrega la variable `PANEL_KEY` (la clave
+  que el artista usará en `/panel`) y opcional `ARTIST_NAME` y `ARTIST_EMAIL`.
+  Sin `PANEL_KEY`, el panel se bloquea por seguridad.
+- **La base de datos se actualiza sola:** las APIs crean/ajustan la tabla
+  `cita_solicitudes` automáticamente al primer uso. Ya no hace falta correr
+  `npx drizzle-kit push` tras cada cambio de esquema.
 - Cada `git push` (o cada commit arrastrado a GitHub) **redeploya
   automáticamente** — así actualizas el sitio.
 - Las imágenes/videos van en `public/` y se sirven desde el CDN de Vercel.
@@ -203,7 +209,7 @@ SSL (elige uno):
 
 ## ✅ Verificación
 
-1. `https://nocta.tecnosofia.xyz` redirige a `/archivo` y se ve la experiencia.
+1. `https://nocta.tecnosofia.xyz` muestra la experiencia directamente (URL limpia).
 2. El cursor scrubbea el video; el panel sube con scroll; al final aparece el
    botón **"simular"**.
 3. `/simulador` genera diseños (colección o IA si pusiste clave).

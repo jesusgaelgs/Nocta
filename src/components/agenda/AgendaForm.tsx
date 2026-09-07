@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import "@fontsource/inter-tight/400.css";
 import "@fontsource/inter-tight/500.css";
@@ -33,6 +33,35 @@ export function AgendaForm() {
     "idle"
   );
   const [mensaje, setMensaje] = useState("");
+  const [sim, setSim] = useState<string | null>(null);
+  const [incluirSim, setIncluirSim] = useState(true);
+
+  /* Recupera la simulación que el cliente guardó desde /simulador */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("nocta-simulacion");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { data?: unknown; fecha?: unknown };
+        if (
+          typeof parsed.data === "string" &&
+          parsed.data.startsWith("data:image/")
+        ) {
+          setSim(parsed.data);
+        }
+      }
+    } catch {
+      /* sin simulación */
+    }
+  }, []);
+
+  const quitarSim = () => {
+    setSim(null);
+    try {
+      localStorage.removeItem("nocta-simulacion");
+    } catch {
+      /* noop */
+    }
+  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -47,6 +76,7 @@ export function AgendaForm() {
           zona,
           concepto,
           fechaPreferida: fecha,
+          simulacion: sim && incluirSim ? sim : undefined,
         }),
       });
       const data = (await resp.json()) as { ok?: boolean; error?: string };
@@ -195,6 +225,40 @@ export function AgendaForm() {
               />
             </div>
 
+            {sim && (
+              <div className="flex items-center gap-4 rounded-2xl border border-neutral-800 p-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={sim}
+                  alt="Tu simulación"
+                  className="h-24 w-18 shrink-0 rounded-lg border border-neutral-800 object-cover"
+                  style={{ width: 72 }}
+                />
+                <div className="min-w-0 flex-1">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={incluirSim}
+                      onChange={(e) => setIncluirSim(e.target.checked)}
+                      className="h-4 w-4 accent-white"
+                    />
+                    Incluir mi simulación
+                  </label>
+                  <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
+                    Así la artista ve exactamente lo que imaginaste. Sin
+                    marcarla, no se adjunta nada.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={quitarSim}
+                    className="mt-2 text-[10px] font-semibold uppercase tracking-widest text-neutral-600 underline-offset-4 hover:text-white hover:underline"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-neutral-800 p-4 text-[11px] uppercase tracking-widest text-neutral-500">
               {HORARIOS.map((h) => (
                 <p key={h} className="leading-relaxed">
@@ -222,6 +286,12 @@ export function AgendaForm() {
 
         <footer className="mt-24 flex flex-col items-center justify-between gap-4 border-t border-neutral-900 pt-6 text-[11px] font-medium uppercase tracking-widest text-neutral-600 md:flex-row">
           <span>NOCTA ® 2026</span>
+          <Link
+            href="/panel"
+            className="transition hover:text-neutral-300"
+          >
+            Panel del estudio
+          </Link>
           <span>AVISO DE PRIVACIDAD</span>
         </footer>
       </div>

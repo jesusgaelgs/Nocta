@@ -150,6 +150,17 @@
   }
 }
 
+#outro-footer .panel-link {
+  pointer-events: auto;
+  color: #fff;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+#outro-footer .panel-link:hover {
+  opacity: 0.6;
+}
+
 /* ---------- 4.2 Cursor custom ---------- */
 #cursor {
   position: fixed;
@@ -253,6 +264,14 @@
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
+  pointer-events: auto;
+  color: #fff;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.nav-about:hover {
+  opacity: 0.6;
 }
 
 .nav-burger {

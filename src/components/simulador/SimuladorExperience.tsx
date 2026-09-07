@@ -308,6 +308,25 @@ export function SimuladorExperience() {
     setDrawVersion((v) => v + 1);
   };
 
+  /* Guarda la simulación para la agenda (localStorage) y navega.
+     La foto nunca sube a un servidor: solo viaja si el cliente
+     consiente incluirla en su solicitud. */
+  const guardarYAgendar = () => {
+    const canvas = canvasRef.current;
+    if (canvas && design) {
+      try {
+        const data = canvas.toDataURL("image/jpeg", 0.82);
+        localStorage.setItem(
+          "nocta-simulacion",
+          JSON.stringify({ data, fecha: Date.now() })
+        );
+      } catch {
+        /* cuota llena o lienzo enorme: seguimos sin adjuntar */
+      }
+    }
+    window.location.href = "/agenda";
+  };
+
   return (
     <main className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-6xl px-5 pb-24 pt-6 md:px-8">
@@ -584,12 +603,13 @@ export function SimuladorExperience() {
                   >
                     ⤓ Descargar PNG
                   </button>
-                  <Link
-                    href="/agenda"
+                  <button
+                    type="button"
+                    onClick={guardarYAgendar}
                     className="rounded-full border border-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest transition hover:bg-white hover:text-black"
                   >
                     Agendar
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>
@@ -603,6 +623,12 @@ export function SimuladorExperience() {
             Los diseños generados son orientativos; Valentina ajusta el trazo
             final contigo.
           </span>
+          <Link
+            href="/panel"
+            className="transition hover:text-neutral-300"
+          >
+            Panel del estudio
+          </Link>
           <span>AVISO DE PRIVACIDAD</span>
         </footer>
       </div>
