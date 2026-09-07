@@ -110,9 +110,13 @@ igual; la agenda solo avisará que no hay BD.)
 - **Panel del estudio:** en Vercel agrega la variable `PANEL_KEY` (la clave
   que el artista usará en `/panel`) y opcional `ARTIST_NAME` y `ARTIST_EMAIL`.
   Sin `PANEL_KEY`, el panel se bloquea por seguridad.
-- **La base de datos se actualiza sola:** las APIs crean/ajustan la tabla
-  `cita_solicitudes` automáticamente al primer uso. Ya no hace falta correr
-  `npx drizzle-kit push` tras cada cambio de esquema.
+- El panel tiene 3 pestañas: **Solicitudes** (bandeja: aceptar o dejar pasar — al
+  aceptar con fecha se crea cita automática en la Agenda y se redacta el mensaje al
+  cliente, con toast de feedback), **Agenda** (calendario mensual — aceptadas con
+  fecha se cargan solas, puedes añadir manualmente) e **Ideas** (pendientes con
+  checkbox "hecho"). Las 3 tablas (`cita_solicitudes`, `citas`, `notas`) se crean
+  solas al primer uso. Ya no hace falta correr `npx drizzle-kit push` tras cambios
+  de esquema.
 - Cada `git push` (o cada commit arrastrado a GitHub) **redeploya
   automáticamente** — así actualizas el sitio.
 - Las imágenes/videos van en `public/` y se sirven desde el CDN de Vercel.

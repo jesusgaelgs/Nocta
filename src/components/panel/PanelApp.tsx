@@ -8,7 +8,13 @@
  *   IDEAS       → espacio de ideas y pendientes
  */
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import "@fontsource/inter-tight/400.css";
 import "@fontsource/inter-tight/500.css";
 import "@fontsource/inter-tight/600.css";
@@ -131,7 +137,7 @@ export function PanelApp() {
         fetch("/api/panel/ideas", { cache: "no-store" }),
       ]);
       if (lr.status === 401 || cr.status === 401 || nr.status === 401) {
-        if (authed !== false) setAuthed(false);
+        setAuthed(false);
         return;
       }
       const [ld, cd, nd] = (await Promise.all([
@@ -143,43 +149,29 @@ export function PanelApp() {
         { ok?: boolean; citas?: Cita[] },
         { ok?: boolean; notas?: Nota[] },
       ];
-      /*
-       * React 19 / Next 16: hacer setAuthed(true) junto a todos los set* de
-       * datos en el MISMO commit, tras un await, dispara el error #310
-       * (Render not wrapped in act). Separamos: primero cambia la sesión
-       * (muestra el shell), y en el siguiente microtask se rellenan datos.
-       */
-      if (authed !== true) {
-        setAuthed(true);
-      }
-      queueMicrotask(() => {
-        if (ld.ok) setLeads(ld.leads ?? []);
-        if (cd.ok) setCitas(cd.citas ?? []);
-        if (nd.ok) setNotas(nd.notas ?? []);
-        setDbError(!ld.ok && !cd.ok && !nd.ok);
-        setCargando(false);
-      });
+      if (ld.ok) setLeads(ld.leads ?? []);
+      if (cd.ok) setCitas(cd.citas ?? []);
+      if (nd.ok) setNotas(nd.notas ?? []);
+      /* Si las tres fallan con ok:false, lo más probable es que falte
+         DATABASE_URL (Supabase). Avisamos con claridad, sin tecnicismos. */
+      setDbError(!ld.ok && !cd.ok && !nd.ok);
+      setAuthed(true);
     } catch {
+      /* red caída: conservar lo que hay */
+    } finally {
       setCargando(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed]);
-
-  /* Al montar: chequeo inicial. loadAll decide authed. */
-  useEffect(() => {
-    if (authed !== null) return; // ya decidido (p.ej. por login)
-    void loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Ya autenticado: carga datos + refresco cada 30s. */
   useEffect(() => {
-    if (authed !== true) return;
     void loadAll();
+  }, [loadAll]);
+
+  useEffect(() => {
+    if (!authed) return;
     const t = setInterval(() => void loadAll(), 30000);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed]);
+  }, [authed, loadAll]);
 
   useEffect(() => {
     setNuevaFecha(sel);
@@ -195,11 +187,8 @@ export function PanelApp() {
         body: JSON.stringify({ clave }),
       });
       if (res.ok) {
-        /* Recarga completa de la página tras login correcto: esto reinicia
-           React desde cero, eliminando el error #310 (Render not wrapped in
-           act). Al volver a montar, la cookie de sesión ya está puesta y el
-           panel carga directo autenticado. */
-        window.location.reload();
+        setAuthed(true);
+        void loadAll();
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         setLoginError(data.error || "Clave incorrecta.");
@@ -209,67 +198,79 @@ export function PanelApp() {
     }
   };
 
+  /* ---------- Solicitudes ---------- */
+  const responderInner = useCallback(
+    async (lead: Lead, accion: "aceptar" | "declinar", silent = false) => {
+      try {
+        const res = await fetch(`/api/panel/leads/${lead.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accion }),
+        });
+        if (res.status === 401) {
+          setAuthed(false);
+          return;
+        }
+        const data = (await res.json()) as {
+          ok?: boolean;
+          estado?: string;
+          mensaje?: string;
+          whatsapp?: string | null;
+          citaCreada?: boolean;
+        };
+        if (data.ok) {
+          setLeads((ls) =>
+            ls.map((l) =>
+              l.id === lead.id
+                ? {
+                    ...l,
+                    estado: data.estado ?? l.estado,
+                    respondidoEn: new Date().toISOString(),
+                  }
+                : l
+            )
+          );
+          if (accion === "aceptar") {
+            if (data.citaCreada) {
+              setToast("Aceptada · cita añadida a tu agenda ✓");
+              void loadAll();
+            } else if (silent) {
+              setToast("Mensaje redactado · listo para enviar");
+            }
+            if (data.mensaje) {
+              setCopiado(false);
+              setModal({
+                mensaje: data.mensaje,
+                whatsapp: data.whatsapp ?? null,
+                nombre: lead.nombre,
+              });
+            }
+          } else {
+            setToast("Solicitud dejada pasar.");
+            setTimeout(() => setToast(""), 2500);
+          }
+        }
+      } catch {
+        setToast("No pudimos actualizar. Intenta de nuevo.");
+        setTimeout(() => setToast(""), 2500);
+      }
+    },
+    [loadAll]
+  );
+
+  const responder = useCallback(
+    (lead: Lead, accion: "aceptar" | "declinar", silent = false) => {
+      void responderInner(lead, accion, silent);
+    },
+    [responderInner]
+  );
+
   const onLogout = async () => {
     await fetch("/api/panel/logout", { method: "POST" }).catch(() => {});
     setAuthed(false);
     setLeads([]);
     setCitas([]);
     setNotas([]);
-  };
-
-  /* ---------- Solicitudes ---------- */
-  const responder = async (lead: Lead, accion: "aceptar" | "declinar") => {
-    try {
-      const res = await fetch(`/api/panel/leads/${lead.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion }),
-      });
-      if (res.status === 401) {
-        setAuthed(false);
-        return;
-      }
-      const data = (await res.json()) as {
-        ok?: boolean;
-        estado?: string;
-        mensaje?: string;
-        whatsapp?: string | null;
-        citaCreada?: boolean;
-      };
-      if (data.ok) {
-        setLeads((ls) =>
-          ls.map((l) =>
-            l.id === lead.id
-              ? {
-                  ...l,
-                  estado: data.estado ?? l.estado,
-                  respondidoEn: new Date().toISOString(),
-                }
-              : l
-          )
-        );
-        if (accion === "aceptar") {
-          if (data.citaCreada) {
-            setToast("Aceptada · cita añadida a tu agenda ✓");
-            void loadAll();
-          }
-          if (data.mensaje) {
-            setCopiado(false);
-            setModal({
-              mensaje: data.mensaje,
-              whatsapp: data.whatsapp ?? null,
-              nombre: lead.nombre,
-            });
-          }
-        } else {
-          setToast("Solicitud dejada pasar.");
-        }
-        setTimeout(() => setToast(""), 3000);
-      }
-    } catch {
-      setToast("No pudimos actualizar. Intenta de nuevo.");
-      setTimeout(() => setToast(""), 2500);
-    }
   };
 
   const copiar = async () => {
@@ -378,29 +379,6 @@ export function PanelApp() {
     }
   };
 
-  /* ---------- Derivados (HOOKS siempre en el mismo orden: se declaran
-     ANTES de cualquier return condicional para respetar las Reglas de
-     React. Referencias: `leads`, `citas`, `notas`, `ym`, `sel`. ---------- */
-  const citasDelDia = useMemo(
-    () =>
-      citas.filter((c) => c.fecha === sel).sort((a, b) => a.id - b.id),
-    [citas, sel]
-  );
-  const porFecha = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const c of citas) map.set(c.fecha, (map.get(c.fecha) ?? 0) + 1);
-    return map;
-  }, [citas]);
-  const celdas = useMemo(() => matrixMes(ym.y, ym.m), [ym]);
-
-  const nuevas = leads.filter((l) => l.estado === "nuevo");
-  const pendientes = notas.filter((n) => !n.hecho).length;
-  const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: "solicitudes", label: "Solicitudes", count: nuevas.length },
-    { key: "agenda", label: "Agenda" },
-    { key: "ideas", label: "Ideas", count: pendientes },
-  ];
-
   /* ---------- Login ---------- */
   if (authed === false) {
     return (
@@ -445,6 +423,28 @@ export function PanelApp() {
       </main>
     );
   }
+
+  const nuevas = leads.filter((l) => l.estado === "nuevo");
+  const citasDelDia = useMemo(
+    () =>
+      citas
+        .filter((c) => c.fecha === sel)
+        .sort((a, b) => a.id - b.id),
+    [citas, sel]
+  );
+  const porFecha = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of citas) map.set(c.fecha, (map.get(c.fecha) ?? 0) + 1);
+    return map;
+  }, [citas]);
+  const celdas = useMemo(() => matrixMes(ym.y, ym.m), [ym]);
+  const pendientes = notas.filter((n) => !n.hecho).length;
+
+  const tabs: { key: Tab; label: string; count?: number }[] = [
+    { key: "solicitudes", label: "Solicitudes", count: nuevas.length },
+    { key: "agenda", label: "Agenda" },
+    { key: "ideas", label: "Ideas", count: pendientes },
+  ];
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -603,7 +603,7 @@ export function PanelApp() {
                     {lead.estado === "aceptado" && (
                       <button
                         type="button"
-                        onClick={() => void responder(lead, "aceptar")}
+                        onClick={() => void responder(lead, "aceptar", true)}
                         className="shrink-0 self-center rounded-full border border-white px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition hover:bg-white hover:text-black"
                       >
                         Contactar

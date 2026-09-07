@@ -18,7 +18,7 @@ scroll-driven **ARCHIVO** (motor de animación portado de *prmpt*), el
 | `/archivo` | Hero con video scrubbeado por cursor + galería scroll-driven + outro con CTA "simular" |
 | `/simulador` | Sube foto, describe tu idea, proyéctala sobre la piel, descarga PNG |
 | `/agenda` | Formulario de solicitud de cita (guarda en PostgreSQL) |
-| `/panel` | **Panel del estudio** (con clave `PANEL_KEY`): solicitudes por aceptar, agenda de citas con calendario (las aceptadas se cargan solas) e ideas/pendientes. Ligero, sin videos |
+| `/panel` | **Panel del estudio** (con clave `PANEL_KEY`): 3 pestañas — **Solicitudes** (bandeja: aceptar o dejar pasar — aceptar con fecha crea cita automática en la Agenda y redacta el mensaje al cliente), **Agenda** (calendario mensual con citas — aceptadas con fecha se cargan solas) e **Ideas** (pendientes con checkbox "hecho"). Ligero, sin videos |
 | `/api/simulador/generate` | Genera el diseño (IA con clave, colección sin clave) |
 | `/api/agenda` | Guarda las solicitudes de cita |
 
