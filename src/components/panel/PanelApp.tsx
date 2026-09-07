@@ -8,13 +8,7 @@
  *   IDEAS       → espacio de ideas y pendientes
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import "@fontsource/inter-tight/400.css";
 import "@fontsource/inter-tight/500.css";
 import "@fontsource/inter-tight/600.css";
@@ -115,6 +109,7 @@ export function PanelApp() {
   const [modal, setModal] = useState<ModalData | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [toast, setToast] = useState("");
+  const [dbError, setDbError] = useState(false);
 
   /* Agenda */
   const [ym, setYm] = useState<{ y: number; m: number }>(() => {
@@ -136,7 +131,7 @@ export function PanelApp() {
         fetch("/api/panel/ideas", { cache: "no-store" }),
       ]);
       if (lr.status === 401 || cr.status === 401 || nr.status === 401) {
-        setAuthed(false);
+        if (authed !== false) setAuthed(false);
         return;
       }
       const [ld, cd, nd] = (await Promise.all([
@@ -148,26 +143,43 @@ export function PanelApp() {
         { ok?: boolean; citas?: Cita[] },
         { ok?: boolean; notas?: Nota[] },
       ];
-      if (ld.ok) setLeads(ld.leads ?? []);
-      if (cd.ok) setCitas(cd.citas ?? []);
-      if (nd.ok) setNotas(nd.notas ?? []);
-      setAuthed(true);
+      /*
+       * React 19 / Next 16: hacer setAuthed(true) junto a todos los set* de
+       * datos en el MISMO commit, tras un await, dispara el error #310
+       * (Render not wrapped in act). Separamos: primero cambia la sesión
+       * (muestra el shell), y en el siguiente microtask se rellenan datos.
+       */
+      if (authed !== true) {
+        setAuthed(true);
+      }
+      queueMicrotask(() => {
+        if (ld.ok) setLeads(ld.leads ?? []);
+        if (cd.ok) setCitas(cd.citas ?? []);
+        if (nd.ok) setNotas(nd.notas ?? []);
+        setDbError(!ld.ok && !cd.ok && !nd.ok);
+        setCargando(false);
+      });
     } catch {
-      /* red caída: conservar lo que hay */
-    } finally {
       setCargando(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
+
+  /* Al montar: chequeo inicial. loadAll decide authed. */
+  useEffect(() => {
+    if (authed !== null) return; // ya decidido (p.ej. por login)
+    void loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* Ya autenticado: carga datos + refresco cada 30s. */
   useEffect(() => {
+    if (authed !== true) return;
     void loadAll();
-  }, [loadAll]);
-
-  useEffect(() => {
-    if (!authed) return;
     const t = setInterval(() => void loadAll(), 30000);
     return () => clearInterval(t);
-  }, [authed, loadAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
 
   useEffect(() => {
     setNuevaFecha(sel);
@@ -183,8 +195,11 @@ export function PanelApp() {
         body: JSON.stringify({ clave }),
       });
       if (res.ok) {
-        setAuthed(true);
-        void loadAll();
+        /* Recarga completa de la página tras login correcto: esto reinicia
+           React desde cero, eliminando el error #310 (Render not wrapped in
+           act). Al volver a montar, la cookie de sesión ya está puesta y el
+           panel carga directo autenticado. */
+        window.location.reload();
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         setLoginError(data.error || "Clave incorrecta.");
@@ -363,6 +378,29 @@ export function PanelApp() {
     }
   };
 
+  /* ---------- Derivados (HOOKS siempre en el mismo orden: se declaran
+     ANTES de cualquier return condicional para respetar las Reglas de
+     React. Referencias: `leads`, `citas`, `notas`, `ym`, `sel`. ---------- */
+  const citasDelDia = useMemo(
+    () =>
+      citas.filter((c) => c.fecha === sel).sort((a, b) => a.id - b.id),
+    [citas, sel]
+  );
+  const porFecha = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of citas) map.set(c.fecha, (map.get(c.fecha) ?? 0) + 1);
+    return map;
+  }, [citas]);
+  const celdas = useMemo(() => matrixMes(ym.y, ym.m), [ym]);
+
+  const nuevas = leads.filter((l) => l.estado === "nuevo");
+  const pendientes = notas.filter((n) => !n.hecho).length;
+  const tabs: { key: Tab; label: string; count?: number }[] = [
+    { key: "solicitudes", label: "Solicitudes", count: nuevas.length },
+    { key: "agenda", label: "Agenda" },
+    { key: "ideas", label: "Ideas", count: pendientes },
+  ];
+
   /* ---------- Login ---------- */
   if (authed === false) {
     return (
@@ -408,28 +446,6 @@ export function PanelApp() {
     );
   }
 
-  const nuevas = leads.filter((l) => l.estado === "nuevo");
-  const citasDelDia = useMemo(
-    () =>
-      citas
-        .filter((c) => c.fecha === sel)
-        .sort((a, b) => a.id - b.id),
-    [citas, sel]
-  );
-  const porFecha = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const c of citas) map.set(c.fecha, (map.get(c.fecha) ?? 0) + 1);
-    return map;
-  }, [citas]);
-  const celdas = useMemo(() => matrixMes(ym.y, ym.m), [ym]);
-  const pendientes = notas.filter((n) => !n.hecho).length;
-
-  const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: "solicitudes", label: "Solicitudes", count: nuevas.length },
-    { key: "agenda", label: "Agenda" },
-    { key: "ideas", label: "Ideas", count: pendientes },
-  ];
-
   return (
     <main className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-3xl px-5 pb-24 pt-6 md:px-8">
@@ -459,6 +475,15 @@ export function PanelApp() {
             </button>
           </div>
         </header>
+
+        {dbError && (
+          <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/5 p-4 text-xs leading-relaxed text-amber-200">
+            ✦ La bandeja no está conectada a su base de datos — agrega{" "}
+            <code className="rounded bg-black/40 px-1">DATABASE_URL</code> en
+            Vercel (Settings → Environment Variables) y redeploya. Mientras
+            tanto, la página sigue funcionando.
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="mt-10 flex gap-6 border-b border-neutral-800">
